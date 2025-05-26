@@ -1,0 +1,87 @@
+' Copyright Xinyuan Zhou 2024
+Function RoundUp(ByVal Value As Double)
+    If Int(Value) = Value Then
+        RoundUp = Value
+    Else
+        RoundUp = Int(Value) + 1
+    End If
+End Function
+Function max(x, y As Variant) As Variant
+  max = IIf(x > y, x, y)
+End Function
+Function min(x, y As Variant) As Variant
+   min = IIf(x < y, x, y)
+End Function
+
+Sub CopyDataToWord(dataArray As Variant)
+    Dim wordApp     As Object
+    Dim wordDoc     As Object
+    Dim tbl         As Object
+    Dim rowCounter  As Integer
+    Dim cellCounter As Integer
+    Dim currentRow  As Integer
+    Dim currentCol  As Integer
+    Dim cl          As Integer
+    cl = InputBox("Enter number of grids in each column")
+    ' Initialize Word application and document
+    Set wordApp = CreateObject("Word.Application")
+    wordApp.Visible = True
+    Set wordDoc = wordApp.Documents.Add
+    
+    ' Initialize variables
+    rowCounter = 1
+    currentRow = 1
+    currentCol = 1
+    Dim ws As Worksheet
+    Set ws = ThisWorkbook.ActiveSheet
+    Set tbl = wordDoc.Tables.Add(wordDoc.Range, min(cl, UBound(dataArray, 1)), RoundUp(UBound(dataArray, 1) / cl))
+    tbl.Style = "Table Grid"
+    ' Loop through each row in the array
+    Do While rowCounter <= UBound(dataArray, 1)
+        ' Loop through each cell in the array
+        For cellCounter = 1 To UBound(dataArray, 2) - 2
+            ' Add value to Word table
+            If cellCounter = 1 Then
+                ' MsgBox "" & currentRow
+                tbl.cell(currentRow, currentCol).Range.Text = ConcatenateValues(dataArray(rowCounter, 2), _
+                                     dataArray(rowCounter, 3), _
+                                     dataArray(rowCounter, 1))
+                tbl.cell(currentRow, currentCol).Range.Shading.BackgroundPatternColor = ws.Cells(rowCounter + 1, 1).Interior.Color
+            Else
+                tbl.cell(currentRow, currentCol).Range.Text = tbl.cell(currentRow, currentCol).Range.Text & dataArray(rowCounter, cellCounter + 2)
+            End If
+            
+        Next cellCounter
+        
+        ' Move to the next row in the array
+        rowCounter = rowCounter + 1
+        ' Move to the next cell in Word
+        currentRow = currentRow + 1
+        If currentRow > cl Then
+            currentRow = 1
+            currentCol = currentCol + 1
+        End If
+    Loop
+    'tbl.Style = "Table Grid"
+    ' Clean up
+    Set wordDoc = Nothing
+    Set wordApp = Nothing
+End Sub
+
+Function ConcatenateValues(ByVal col2 As String, ByVal col3 As String, ByVal col1 As String) As String
+    ConcatenateValues = col2 & " " & col3 & vbNewLine & "Room " & col1 & vbNewLine
+End Function
+
+Sub Export()
+    Dim Count       As Integer
+    Dim Data        As Variant
+    Dim DataRange   As Range
+    Dim ws          As Worksheet
+    Dim Roomsize    As Integer
+    Set ws = ThisWorkbook.ActiveSheet
+    Count = InputBox("Enter Number of rooms")
+    Roomsize = InputBox("Enter Room Size")
+    Set DataRange = ws.Range(ws.Range("A2"), ws.Cells(Count + 1, Roomsize + 3))
+    Data = DataRange.Value
+    CopyDataToWord Data
+End Sub

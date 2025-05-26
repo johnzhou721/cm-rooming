@@ -1,0 +1,30 @@
+// Copyright Xinyuan Zhou (c) 2024. All rights reserved.
+// Originally written for my contest math coach.
+// Permission granted to reproduce the *output* of this program in original/modified form without any restrictions.
+
+// script to highlight intergrade/multiple requests.
+function main(workbook: ExcelScript.Workbook) {
+  let sheetInfo = workbook.getWorksheet("Student Info")
+  let n = sheetInfo.getRange("F3").getValue() as number
+  let infos = sheetInfo.getRange("A2:D" + (n + 1).toString()).getValues()
+  let sheetRequest = workbook.getWorksheet("Requests")
+  let m = sheetRequest.getRange("G5").getValue() as number
+  let reqs = sheetRequest.getRange("A2:D" + (m + 1).toString()).getValues()
+  sheetRequest.getRange("A2:D" + (m + 1).toString()).clear(ExcelScript.ClearApplyTo.formats);
+  for (let i = 1; i <= m; i++) {
+    let id1 = <string>reqs[i - 1][0] + " " + <number>reqs[i - 1][1]
+    let id2 = <string>reqs[i - 1][2] + " " + <number>reqs[i - 1][3]
+    let gender1 = "", gender2 = ""
+    for (let j = 1; j <= n; j++) {
+      let idstu = <string>infos[j - 1][1] + " " + <string>infos[j - 1][0] + " " + <number>infos[j - 1][2]
+      if (idstu == id1) gender1 = <string>infos[j - 1][3]
+      if (idstu == id2) gender2 = <string>infos[j - 1][3]
+    }
+    if (gender1 == gender2 && reqs[i - 1][1] != reqs[i - 1][3]) {
+      if (gender1 == "Boy")
+        sheetRequest.getCell(i, 4).getFormat().getFill().setColor("lightblue")
+      else
+        sheetRequest.getCell(i, 4).getFormat().getFill().setColor("lightpink")
+    }
+  }
+}

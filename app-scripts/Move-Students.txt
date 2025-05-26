@@ -1,0 +1,73 @@
+// Copyright Xinyuan Zhou (c) 2024. All rights reserved.
+// Originally written for my contest math coach.
+// Permission granted to reproduce the *output* of this program in original/modified form without any restrictions.
+
+// copied from main.txt keep it synced.
+function colorCode(id: string): string {
+  if (id.endsWith("6")) return 'yellow'
+  if (id.endsWith("7")) return 'lightgreen'
+  if (id.endsWith("8")) return 'lightblue'
+  if (id == 'x') return 'pink'
+  return 'orange'
+}
+function excelRangeToRowColumn(range: string): [number, number] {
+  const match = range.match(/([A-Z]+)([0-9]+)/);
+  if (!match) {
+    throw new Error("Invalid range format");
+  }
+  const [, columnString, rowString] = match;
+  let column = 0;
+  for (let i = 0; i < columnString.length; i++) {
+    column = column * 26 + (columnString.charCodeAt(i) - 65 + 1);
+  }
+  const row = parseInt(rowString, 10) - 1;
+  return [row, column - 1];
+}
+
+function main(workbook: ExcelScript.Workbook) {
+  let currentSheet = workbook.getActiveWorksheet()
+  let signin = workbook.getWorksheet("Roster")
+  let fromloc = <string>currentSheet.getRange("J6").getValue()
+  let toloc = <string>currentSheet.getRange("J8").getValue()
+  let fromname = <string>currentSheet.getRange(fromloc).getValue()
+  let toname = <string>currentSheet.getRange(toloc).getValue()
+  if (fromname == "") {
+    currentSheet.getRange("J9").setValue("Status: Does not have a name in cell")
+    return
+  }
+  currentSheet.getRange("J9").setValue("")
+  let n = workbook.getWorksheet("Student Info").getRange("F3").getValue() as number
+  let vals = signin.getRange("A3:F" + (n + 2).toString()).getValues() as (number | string)[][]
+  console.log(n)
+  const [fromr, fromc] = excelRangeToRowColumn(fromloc)
+  const [tor, toc] = excelRangeToRowColumn(toloc)
+  currentSheet.getRange(toloc).setValue(fromname)
+  currentSheet.getRange(toloc).getFormat().getFill().setColor(colorCode(fromname))
+  if (toname) {
+    currentSheet.getRange(fromloc).setValue(toname)
+    currentSheet.getRange(fromloc).getFormat().getFill().setColor(colorCode(toname))
+  }
+  else {
+    currentSheet.getRange(fromloc).setValue("")
+    currentSheet.getRange(fromloc).getFormat().getFill().clear()
+  }
+  let fromRoom = currentSheet.getCell(fromr, 0).getValue() as number
+  let fromSector = currentSheet.getCell(fromr, 1).getValue() as string
+  let toRoom = currentSheet.getCell(tor, 0).getValue() as number
+  let toSector = currentSheet.getCell(tor, 1).getValue() as string
+
+  // update roster
+  vals.forEach((a) => {
+    let id = <string>a[1] + " " + <string>a[0] + " " + <number>a[2]
+    // console.log(id)
+    if (id == toname) {
+      a[5] = fromRoom
+      a[4] = fromSector
+    }
+    if (id == fromname) {
+      a[5] = toRoom
+      a[4] = toSector
+    }
+  })
+  signin.getRange("A3:F" + (n + 2).toString()).setValues(vals)
+}

@@ -1,0 +1,852 @@
+// Copyright Xinyuan Zhou (c) 2024. All rights reserved.
+// Originally written for my contest math coach. Modified since first use.
+// Permission granted to reproduce the *output* of this program in original/modified form without any restrictions.
+
+// converts any datatype compatible for storing in excel to a string.
+function resolveAsString(item: string | number | boolean): string {
+  if (typeof item == "string")
+    return item
+  else if (typeof item == "number")
+    return item.toString()
+  else
+    return (+item).toString()
+}
+
+// Resize array function
+function resizebig(arr: Array<unknown>, size: number) {
+  while (arr.length < size) { arr.push(undefined); }
+}
+
+// color code an ID where the last few digits in the grade level.
+function colorCode(id: string): string {
+  if (id.endsWith("6")) return 'yellow'
+  if (id.endsWith("7")) return 'lightgreen'
+  if (id.endsWith("8")) return 'lightblue'
+  if (id == 'x') return 'pink'
+  return 'orange'
+}
+
+// color code a sector; starts with grade level like 6 in "6th grade Boy" and detect other situations.
+function colorCodeSectors(id: string): string {
+  if (id.startsWith("6")) return 'yellow'
+  if (id.startsWith("7")) return 'lightgreen'
+  if (id.startsWith("8")) return 'lightblue'
+  if (id.startsWith("other") || id.startsWith("(multiple)")) return '#FF7F7F'
+  if (id == 'x') return 'pink'
+  return 'orange'
+}
+
+// reserving rooms for my favorite math teacher
+// 1 element only for array. the array part is a calling convention thing.
+function is325(rn: (string | number)[]): boolean {
+  if (rn === undefined) return false
+  if (rn[0] == 325) return true
+  else if (rn[0] == 3251) return true
+  else if (typeof rn[0] == 'number' && rn[0] % 1000 == 325) return true
+  return false
+}
+// pretty obvious...
+function getCurrentYear(): number {
+  return (new Date()).getFullYear()
+}
+
+// intergrade request object
+interface interRequest {
+  req: request // reference to request
+  ma: number // priority
+}
+
+// information for sectors
+class sectorInfo {
+  constructor() {
+    for (let a = 6; a <= 8; a++) {
+      this[a.toString() + "th grade Boy"] = []
+      this[a.toString() + "th grade Girl"] = []
+    }
+    this["(multiple) Boy"] = []
+    this["(multiple) Girl"] = []
+  }
+}
+
+// student info class used while parsing.
+class student {
+  last: string
+  first: string
+  ID: string
+  nID: number
+  grade: number
+  gender: string
+  sector: string
+  // ordinal
+  rn: string
+  // acutal number
+  roomNumber: (string | number)
+  leftover: boolean
+  constructor(last: string, first: string, ID: string, nID: number, grade: number, gender: string) {
+    this.last = last
+    this.first = first
+    this.ID = ID
+    this.nID = nID
+    this.grade = grade
+    this.gender = gender
+    this.sector = grade.toString() + "th grade " + gender
+    this.leftover = false
+  }
+  serialize(): Array<string | number | boolean> {
+    let sector = this.sector
+    if (this.leftover) sector = "other " + this.gender
+    return [this.last, this.first, this.grade, this.gender, sector, this.roomNumber]
+  }
+}
+
+// request object
+class request {
+  rID: number
+  student1: student
+  student2: student
+  constructor(a: student, b: student) {
+    this.student1 = a
+    this.student2 = b
+  }
+}
+
+// solver without management - decprecated. The logic is implemented in solver() and dfs()
+function indSheet(sheet: ExcelScript.Worksheet) {
+  // Read the information from the sheet.
+  let n = sheet.getRange("F3").getValue() as number
+  let m = sheet.getCell(4, 5).getValue() as number
+  // aRange is the requests, nRange is the student IDs. This is NOT COMPATIBLE with the student class.
+  let aRange = sheet.getRange("D2:E" + (m + 1).toString()).getValues() as string[][]
+  let nRange = sheet.getRange("A2:A" + (n + 1).toString()).getValues() as string[][]
+  // Solver function call. 0 and [] are for anti-requests that is not currently entered in the old sheet.
+  let res = solver(nRange, aRange, [])
+  let numRooms = res.numRooms
+  let rooms = res.rooms
+  // Put output
+  sheet.getCell(10, 6).setValue(numRooms)
+  if (n != 0) sheet.getRange("B2:B" + (n + 1).toString()).setValues(rooms)
+}
+
+// Variables for core solving algorithm
+// Size of room (default global, will be changed through data entry)
+let roomsize = 4
+// Association table. ass[a][b] = whether people a and b have a request. Bi-directional & couples do not overcount
+let ass: boolean[][] = []
+// How many requests do I have (either someone request me or I request someone else. couples are only 1)
+let assn: number[] = []
+// Rooming for people. Logically 1-diemensional. Second diemension only use 0 as index - 2nd diemension reserved for future use.
+let rooms: (string | number)[][] = []
+// Anti-Association table. see above. We do not need to pre-count # of people anti-associated because the algorithm does not need it.
+let antiass: boolean[][] = []
+// Basically an alias for n in the solver function. Prefixed with ind because it is individual sector - I do not want to confuse myself with the management variables.
+let indn = 0
+// DFS results. Compared against. Cleared in each iteration.
+let minn = 2e9, minstack: number[] = []
+// also dfs results
+let antiminn = 2e9
+// for dfs algorithm use (below 2 arrays)
+let s: number[] = []
+let antis: number[] = []
+
+// Use depth-first search for each room. depth is the ordinal of the person you are searching in the room, like "2nd person in room"
+// last is the last person's numerical id. This is not relevant with the bigger "managed" part - where we separate student into sectors.
+// stack is the collection of the people to be placed in the room (currently considered).
+// cumulative is the number of constraints unsatisfied at last. Preprocessing is used with arrays.
+// anticumulative is the number of anti-constraints unsatisfied at last. Anti-constraints are requests where people does NOT want to be together.
+// If you want to skip the review of this part feel free.
+
+// Does this:
+// choose a combination of roomsize (in this case, 4 only)
+// Find the value of sigma assn of all chosen minus 2 * sigma ass of i, j where i < j and i, j are both in the chosen set minus sigma of ass of i, i where is in in the chosen set.
+// find minimum of that value along with associated a, b, c, and d. If equal, find the minimum of # of unsatified anti-requests.
+// then for each assn value remove ass[i][val1] ... ass[i][val_n]. Then put assignments in rooms[person_number][0].
+// Handle Leftovers then.
+function dfs(depth: number, last: number, stack: number[], cumulative: number, anticumulative: number) {
+  if (depth > roomsize) {
+    if (cumulative < minn || anticumulative < antiminn && cumulative == minn) {
+      minn = cumulative, antiminn = anticumulative, minstack = stack
+    }
+    return
+  }
+  for (let a = last + 1; a <= indn; a++) {
+    if (rooms[a - 1][0])
+      continue
+    // cut down the time a little - no need to preprocess for further sectors.
+    if (depth != roomsize) {
+      for (let b = 1; b <= indn; b++) {
+        s[b] += +ass[a][b];
+      }
+      for (let b = 1; b <= indn; b++) {
+        antis[b] += +antiass[a][b];
+      }
+    }
+    // make sure the going-to-be-subtracted one is back (do not overdo it)
+    else {
+      s[a] += +ass[a][a];
+      antis[a] += +antiass[a][a]
+    }
+    dfs(depth + 1, a, stack.concat([a]), cumulative + assn[a] + (+ass[a][a]) - 2 * s[a], anticumulative + antis[a] - +antiass[a][a])
+    // see first comment with same if condition.
+    // backtrack - do not undo if not done.
+    if (depth != roomsize) {
+      for (let b = 1; b <= indn; b++) {
+        s[b] -= +ass[a][b];
+      }
+      for (let b = 1; b <= indn; b++) {
+        antis[b] -= +antiass[a][b];
+      }
+    }
+    else {
+      s[a] -= +ass[a][a];
+      antis[a] -= +antiass[a][a]
+    }
+  }
+}
+
+// solver function
+function solver(nRange: string[][], aRange: string[][], antiARange: string[][]) {
+  let n = nRange.length
+  let m = aRange.length
+  let antim = antiARange.length
+  // Set up a few tables
+  ass = []
+  antiass = []
+  indn = n
+  for (let i = 0; i <= n; i++) {
+    ass.push([])
+    for (let j = 0; j <= n; j++)
+      ass[i].push(false)
+  }
+  for (let i = 0; i <= n; i++) {
+    antiass.push([])
+    for (let j = 0; j <= n; j++)
+      antiass[i].push(false)
+  }
+
+  // build association tables and stats for algorithm
+  for (let i = 1; i <= m; i++) {
+    let a = aRange[i - 1][0]
+    let b = aRange[i - 1][1]
+    let aid = nRange.findIndex((element) => (element[0] == a)) + 1
+    let bid = nRange.findIndex((element) => (element[0] == b)) + 1
+    ass[aid][bid] = true
+    ass[bid][aid] = true
+  }
+  for (let i = 1; i <= antim; i++) {
+    let a = antiARange[i - 1][0]
+    let b = antiARange[i - 1][1]
+    let aid = nRange.findIndex((element) => (element[0] == a)) + 1
+    let bid = nRange.findIndex((element) => (element[0] == b)) + 1
+    antiass[aid][bid] = true
+    antiass[bid][aid] = true
+  }
+  //console.log(antiass)
+  //console.log(nRange)
+  assn = Array(n + 1).fill(0)
+  for (let i = 1; i <= n; i++) {
+    for (let j = 1; j <= n; j++)
+      assn[i] += +ass[i][j]
+  }
+
+  let gr = 1
+  let sum = 0
+  rooms = []
+  for (let i = 1; i <= n; i++) {
+    rooms.push([0])
+  }
+
+  // call the dfs function. See documentation for algorithm.
+  for (; gr <= n / roomsize; gr++) {
+    minn = 1e9
+    minstack = []
+    s = []
+    antis = []
+    antiminn = 1e9
+    for (let i = 0; i <= n; i++) s.push(0), antis.push(0)
+    dfs(1, 0, [], 0, 0)
+    for (let i = 1; i <= n; i++) {
+      minstack.forEach((val) => {
+        assn[i] -= +ass[i][val]
+        assn[val] -= +ass[val][i]
+        ass[i][val] = ass[val][i] = false
+      })
+    }
+    for (let i = 1; i <= n; i++) {
+      minstack.forEach((val) => {
+        antiass[i][val] = antiass[val][i] = false
+      })
+    }
+    minstack.forEach((val) => { rooms[val - 1][0] = gr })
+    sum += minn
+  }
+  console.log("unsatisfied:" + sum)
+  let cnt = 0
+  // Make them extras - previously as you might have heard leftovers
+  for (let i = 1; i <= n; i++)
+    if (!rooms[i - 1][0]) {
+      cnt++
+    }
+  if (cnt >= 3) gr++
+  for (let i = 1; i <= n; i++)
+    if (!rooms[i - 1][0]) {
+      if (cnt >= 3) {
+        rooms[i - 1][0] = gr - 1
+      }
+      else
+      {
+        rooms[i - 1][0] = "Extras"
+      }
+      cnt++
+    }
+  return { numRooms: gr - 1, rooms: rooms }
+}
+
+// function to parse big form
+function parser(workbook: ExcelScript.Workbook) {
+  // SOME OF THOSE VARIABLES ALTHOUGH WITH SAME NAME ARE DIFFERENT FROM THE UNMANAGED SOLVER.
+  // parse a bunch of info for chaperone room sizes
+  let maxchapcountboy: number = 2
+  let maxchapcountgirl: number = 1
+  let chapsize: number = 2
+  let sheetInfo = workbook.getWorksheet("Student Info")
+  let tmp = sheetInfo.getRange("F11").getValue()
+  if (typeof tmp == 'number')
+    maxchapcountboy = tmp
+  tmp = sheetInfo.getRange("F13").getValue()
+  if (typeof tmp == 'number')
+    maxchapcountgirl = tmp
+  tmp = sheetInfo.getRange("F15").getValue()
+  if (typeof tmp == 'number')
+    chapsize = tmp
+  let sheetRequest = workbook.getWorksheet("Requests")
+  let size = sheetInfo.getRange("F9").getValue()
+  if (typeof size == "number") {
+    roomsize = size
+  }
+
+  // parse our student info and store them. Most of those objects are changed later.
+  let n = sheetInfo.getRange("F3").getValue() as number
+  let infos = sheetInfo.getRange("A2:D" + (n + 1).toString()).getValues()
+  let students: student[] = [undefined]
+  for (let i = 1; i <= n; i++) {
+    let grade = (infos[i - 1][2]) as number
+    let gender = infos[i - 1][3] as string
+    let last = infos[i - 1][0] as string
+    let first = infos[i - 1][1] as string
+    // console.log(grade, gender)
+    let ID = first + " " + last + " " + grade.toString()
+    let st = new student(last, first, ID, i, grade, gender)
+    students.push(st)
+  }
+  let m = sheetRequest.getCell(4, 6).getValue() as number
+  let allReq: request[] = [undefined]
+
+  // handling of requests.
+  let reqstrings = sheetRequest.getRange("A2:D" + (m + 1).toString()).getValues()
+
+  // intergrade requests - highest priority only. Modify the sector of students.
+  let interReq: {
+    "Boy": interRequest[],
+    "Girl": interRequest[],
+  } = { "Boy": [], "Girl": [] }
+  let pris = sheetRequest.getRange("E2:E" + (m + 1).toString()).getValues() as number[][]
+  for (let i = 1; i <= m; i++) {
+    let grade1 = reqstrings[i - 1][1]
+    let student1 = reqstrings[i - 1][0]
+    let grade2 = reqstrings[i - 1][3]
+    let student2 = reqstrings[i - 1][2]
+    let id1 = student1 + " " + grade1
+    let id2 = student2 + " " + grade2
+    let s1id = students[students.findIndex((s) => (s !== undefined && s.ID == id1))].nID
+    let s2id = students[students.findIndex((s) => (s !== undefined && s.ID == id2))].nID
+    let s1 = students[s1id]
+    let s2 = students[s2id]
+    // console.log(s1,s2)
+    let re = new request(s1, s2)
+    allReq.push(re)
+    //console.log(gender1.toString()+" " +gender2.toString())
+    if (s1.gender != s2.gender) {
+      console.log("Warning: Ignore constraint" + i.toString() + " boys cannot sleep with girls")
+    } else if (grade1 != grade2) {
+      interReq[s1.gender].push({ req: re, ma: pris[i - 1][0] })
+    }
+  }
+  let cmp = (a: interRequest, b: interRequest) => {
+    if (a.ma < b.ma) return -1
+    if (b.ma > a.ma) return 1
+    if (a.req.rID < b.req.rID) return -1
+    if (b.req.rID > a.req.rID) return 1
+    return 0
+  }
+  interReq["Boy"].sort((a, b) => { return cmp(a, b) })
+  interReq["Girl"].sort((a, b) => { return cmp(a, b) })
+  // console.log(interReq)
+  let genders = ["Boy", "Girl"]
+  for (let gdrid = 0, gdr = genders[gdrid], quota = sheetInfo.getRange("F5").getValue(); gdrid < 2; gdrid++, gdr = genders[gdrid], quota = sheetInfo.getRange("F7").getValue()) {
+    let s = new Set()
+    let multi_allocated = 0
+    let interReq_index = 0
+    while (interReq_index < interReq[gdr].length) {
+      let id1: number = interReq[gdr][interReq_index].req.student1.nID
+      let id2: number = interReq[gdr][interReq_index].req.student2.nID
+      let newones = +(!s.has(id1)) + +(!s.has(id2))
+      if (multi_allocated + newones <= quota) {
+        s.add(id1); s.add(id2)
+        multi_allocated = s.size
+        students[id1].sector = students[id2].sector = "(multiple) " + interReq[gdr][interReq_index].req.student1.gender
+      }
+      interReq_index++
+    }
+    //console.log(s)
+  }
+
+  // actually start doing request stuff.
+  let names: sectorInfo = new sectorInfo()
+  let requirements: sectorInfo = new sectorInfo()
+  for (let i = 1; i <= n; i++) {
+    let sector = students[i].sector
+    names[sector].push(students[i])
+  }
+  let requestSectors: string[][] = Array(m)
+  for (let i = 1; i <= m; i++) {
+    requestSectors[i - 1] = [""]
+    let objReq = allReq[i]
+    let student1 = objReq.student1
+    let student2 = objReq.student2
+    // Same logical sector excluding intergrade
+    if (student1.grade == student2.grade && student1.gender == student2.gender) {
+      let sector = student1.grade + "th grade " + student1.gender
+      // if they are from the same grade level, the request only is useful if they are actually in their own grade level sector.
+      // If they both are in the intergrade pool by design that request does not count.
+      if (sector == student1.sector && sector == student2.sector) {
+        let obj = new request(student1, student2)
+        obj.rID = i
+        requirements[sector].push(obj)
+        requestSectors[i - 1] = [sector]
+      }
+    } else if (student1.gender == student2.gender) {
+      let sector = "(multiple) " + student1.gender
+      if (!(sector in requirements)) {
+        console.log("ERROR - No Sector")
+      } else {
+        if (sector == student1.sector && sector == student2.sector) {
+          let obj: request = new request(student1, student2)
+          obj.rID = i
+          requirements[sector].push(obj)
+          requestSectors[i - 1] = [sector]
+        }
+      }
+    }
+  }
+  // console.log(requestSectors)
+  // console.log(requirements)
+  // console.log(names)
+
+  // Parse anti-requests
+  let antisheet = workbook.getWorksheet("Anti-Requests")
+  let antim = antisheet.getRange("G5").getValue() as number
+  let antidata = antisheet.getRange("A2:D" + (antim + 1)).getValues()
+  let antiRequests: sectorInfo = new sectorInfo()
+  for (let i = 1; i <= antim; i++) {
+    let grade1 = antidata[i - 1][1] as number
+    let student1 = antidata[i - 1][0] as string
+    let grade2 = antidata[i - 1][3] as number
+    let student2 = antidata[i - 1][2] as string
+    let id1 = student1 + " " + grade1
+    let id2 = student2 + " " + grade2
+    let s1id = students[students.findIndex((s) => (s !== undefined && s.ID == id1))].nID
+    let s2id = students[students.findIndex((s) => (s !== undefined && s.ID == id2))].nID
+    let s1 = students[s1id]
+    let s2 = students[s2id]
+    // only if real sector is the same - people are not together if they are in different sectors.
+    if (s1.sector == s2.sector) {
+      antiRequests[s1.sector].push(new request(s1, s2))
+    }
+  }
+  //console.log(antiRequests)
+  let mostSectors = ["6th grade Boy", "7th grade Boy", "8th grade Boy", "(multiple) Boy", "6th grade Girl", "7th grade Girl", "8th grade Girl", "(multiple) Girl"]
+  let rooms = {
+    "(multiple) Boy": [],
+    "(multiple) Girl": [],
+    "6th grade Boy": [],
+    "6th grade Girl": [],
+    "7th grade Boy": [],
+    "7th grade Girl": [],
+    "8th grade Boy": [],
+    "8th grade Girl": [],
+  }
+  for (let i = 0; i < 8; i++) {
+    let sectorName = mostSectors[i]
+    let n1: number = names[sectorName].length
+    let m1: number = requirements[sectorName].length
+    let antim1: number = antiRequests[sectorName].length
+
+    // We need to convert those into string arrays to maintain compatibility with the "unmanaged" solver.
+    let ids: string[][] = []
+    for (let j = 0; j < n1; j++) {
+      ids.push([names[sectorName][j].ID])
+    }
+    let reqR: string[][] = []
+    for (let j = 0; j < m1; j++) {
+      reqR.push([requirements[sectorName][j].student1.ID, requirements[sectorName][j].student2.ID])
+    }
+    let antiReqR: string[][] = []
+    for (let j = 0; j < antim1; j++) {
+      antiReqR.push([antiRequests[sectorName][j].student1.ID, antiRequests[sectorName][j].student2.ID])
+    }
+    // console.log(sectorName)
+
+    // solve it.
+    let result = solver(ids, reqR, antiReqR)
+    let rnn: (number | boolean | string)[][] = result.rooms
+    for (let j = 0; j < n1; j++) {
+      names[sectorName][j].rn = resolveAsString(rnn[j][0])
+    }
+    rooms[sectorName] = result.numRooms
+  }
+  sheetInfo.activate()
+  let roomsAllocated = 0
+  // copy a template sheet and start putting them in.
+  let sheetRooms = workbook.getWorksheet("Room Numbers")
+  let sheetBoy = workbook.getWorksheet("tplt-utils").copy(ExcelScript.WorksheetPositionType.after, workbook.getWorksheet("tplt-utils"))
+  sheetBoy.setName("Boy's Arrangement")
+  sheetBoy.activate()
+
+  let overflowcount = 0
+  let leftOvers = [""]
+  let totalRooms = sheetRooms.getRange("A1").getValue() as number
+  let roomNumbers = sheetRooms.getRange("A3:A" + (totalRooms + 3).toString()).getValues() as (string | number)[][]
+  // console.log("A1:A" + (totalRooms + 1).toString())
+  sheetBoy.getRange("A1:A" + (totalRooms + 1).toString()).setValues(roomNumbers)
+  sheetBoy.activate()
+
+  for (let i = 0; i < 8; i++) {
+    // console.log(leftOvers)
+    // First 4 sectors are boys then girls.
+    if (i == 4) {
+      // Sum up boy (handle leftovers)
+      //console.log(roomsAllocated)
+      let roomsOffset = roomsAllocated
+      let roomID = 1
+      let headcount = 0
+      let currentSheet = workbook.getActiveWorksheet()
+      //console.log(roomsOffset)
+      // Make sure reserved rooms are out of our way.
+      // if you want to call it an easter egg you can.
+      while (is325(roomNumbers[roomsOffset + roomID])) {
+        let cell = currentSheet.getCell(roomsOffset + roomID, 1)
+        cell.setValue("RESERVED--")
+        cell.getFormat().getFill().setColor(colorCode("x"))
+        roomsOffset++
+        roomsAllocated++
+      }
+      let roomnum1: (string | number) = currentSheet.getCell(roomsOffset + roomID, 0).getValue() as (string | number)
+      if (roomnum1 == undefined || roomnum1 == "") {
+        currentSheet.getCell(roomsOffset + roomID, 0).setValue("Overflow" + (++overflowcount))
+        roomnum1 = "Overflow" + (overflowcount)
+      }
+      for (let j = 1; j < leftOvers.length; j++) {
+        let ID = leftOvers[j]
+        if (headcount == roomsize) {
+          let cell = currentSheet.getCell(roomsOffset + roomID, 1)
+          cell.setValue("other Boy")
+          cell.getFormat().getFill().setColor(colorCodeSectors("other Boy"))
+          currentSheet.getCell(roomsOffset + roomID, 2).setValue(roomID)
+          roomID++
+          headcount = 0
+          roomsAllocated++
+          while (is325(roomNumbers[roomsOffset + roomID])) {
+            let cell = currentSheet.getCell(roomsOffset + roomID, 1)
+            cell.setValue("RESERVED--")
+            cell.getFormat().getFill().setColor(colorCode('x'))
+            roomsOffset++
+            roomsAllocated++
+          }
+          roomnum1 = (roomNumbers[roomsOffset + roomID] === undefined ? undefined : roomNumbers[roomsOffset + roomID][0]) as (string | number)
+          if (roomnum1 == undefined || roomnum1 == "") {
+            currentSheet.getCell(roomsOffset + roomID, 0).setValue("Overflow" + (++overflowcount))
+            roomnum1 = "Overflow" + (overflowcount)
+          }
+        }
+        headcount++
+        currentSheet.getCell(roomsOffset + roomID, 2 + headcount).setValue(ID)
+        currentSheet.getCell(roomsOffset + roomID, 2 + headcount).getFormat().getFill().setColor(colorCode(ID))
+        students[students.findIndex((s) => (s !== undefined && s.ID == ID))].roomNumber = roomnum1
+        students[students.findIndex((s) => (s !== undefined && s.ID == ID))].leftover = true
+      }
+
+      // if there are still leftover students in the leftover sector,
+      if (headcount > 0) {
+        // Get a new room up n' running
+        while (is325(roomNumbers[roomsOffset + roomID])) {
+          let cell = currentSheet.getCell(roomsOffset + roomID, 1)
+          cell.setValue("RESERVED--")
+          cell.getFormat().getFill().setColor(colorCode('x'))
+          roomsOffset++
+          roomsAllocated++
+        }
+        let cell = currentSheet.getCell(roomsOffset + roomID, 1)
+        cell.setValue("other Boy")
+        cell.getFormat().getFill().setColor(colorCodeSectors("other Boy"))
+        currentSheet.getCell(roomsOffset + roomID, 2).setValue(roomID)
+        roomID++
+        headcount = 0
+        roomsAllocated++
+      }
+
+      // make sure the last few rooms are marked as either CHAPERONES or OTHER or RESERVED-- in case of 325.
+      roomsOffset = roomsAllocated + 1
+      leftOvers = [""]
+      // console.log(roomsOffset)
+      let chapCount = 0
+      for (let j = roomsOffset; j <= totalRooms; j++) {
+        if (is325(roomNumbers[j])) {
+          currentSheet.getCell(j, 1).setValue("RESERVED--")
+          currentSheet.getCell(j, 1).getFormat().getFill().setColor(colorCode('x'))
+        } else {
+          if (chapCount < maxchapcountboy) {
+            currentSheet.getCell(j, 1).setValue("CHAPERONES")
+            currentSheet.getCell(j, 1).getFormat().getFill().setColor(colorCodeSectors('y'))
+            currentSheet.getCell(j, 2).setValue(chapCount + 1)
+            for (let k = 3; k <= chapsize + 2; k++)
+              currentSheet.getCell(j, k).getFormat().getFill().setColor(colorCode('y'))
+          }
+          else {
+            currentSheet.getCell(j, 1).setValue("OTHER")
+          }
+          chapCount++
+        }
+      }
+      // switch to girls
+      let sheetGirl = workbook.getWorksheet("tplt-utils").copy(ExcelScript.WorksheetPositionType.after, workbook.getWorksheet("Boy's Arrangement"))
+      sheetGirl.setName("Girl's Arrangement")
+      sheetGirl.activate()
+      totalRooms = sheetRooms.getRange("D1").getValue() as number
+      roomNumbers = sheetRooms.getRange("D3:D" + (totalRooms + 3).toString()).getValues() as number[][]
+      roomsAllocated = 0
+      sheetGirl.getRange("A1:A" + (totalRooms + 1).toString()).setValues(roomNumbers)
+    }
+    let sectorName = mostSectors[i]
+    let roomOffset = roomsAllocated
+    roomsAllocated += rooms[sectorName]
+    let roomList: Array<string>[] = []
+    for (let j = 0; j <= rooms[sectorName]; j++) {
+      roomList.push(
+        []
+      )
+    }
+    for (let j = 0; j < names[sectorName].length; j++) {
+      // rn is room number
+      let rnString: string = names[sectorName][j].rn
+      if (rnString == "Extras") {
+        leftOvers.push(names[sectorName][j].ID)
+      } else {
+        let rn = parseInt(rnString)
+        roomList[rn].push(names[sectorName][j].ID)
+      }
+    }
+    let currentSheet = workbook.getActiveWorksheet()
+    for (let j = 1; j <= rooms[sectorName]; j++) {
+      // skip 325
+      while (is325(roomNumbers[roomOffset + j])) {
+        let cell = currentSheet.getCell(roomOffset + j, 1)
+        cell.setValue("RESERVED--")
+        cell.getFormat().getFill().setColor(colorCode('x'))
+        roomsAllocated++
+        roomOffset++
+      }
+      // put those rooms in
+      let cell = currentSheet.getCell(roomOffset + j, 1)
+      cell.setValue(sectorName)
+      cell.getFormat().getFill().setColor(colorCodeSectors(sectorName))
+      currentSheet.getCell(roomOffset + j, 2).setValue(j)
+      let roomnum: (string|number)
+      if (roomNumbers[roomOffset + j] == undefined || roomNumbers[roomOffset + j][0] == "") {
+        currentSheet.getCell(roomOffset + j, 0).setValue("Overflow" + (++overflowcount))
+        roomnum = "Overflow" + (overflowcount)
+      }
+      else
+      {
+        roomnum = roomNumbers[roomOffset + j][0]
+      }
+      for (let k = 0; k < roomList[j].length; k++) {
+        currentSheet.getCell(roomOffset + j, 3 + k).setValue(roomList[j][k])
+        currentSheet.getCell(roomOffset + j, 3 + k).getFormat().getFill().setColor(colorCode(roomList[j][k]))
+        students[students.findIndex((s) => (s !== undefined && s.ID == roomList[j][k]))].roomNumber = roomnum as (number | string)
+      }
+    }
+  }
+
+  // See the first if condition in the for loop - essentially the same things with boy switched to girl
+  // Sum up girls
+  //console.log(roomsAllocated)
+  // Sum up boy (handle leftovers)
+  //console.log(roomsAllocated)
+  let roomsOffset = roomsAllocated
+  let roomID = 1
+  let headcount = 0
+  let currentSheet = workbook.getActiveWorksheet()
+  //console.log(roomsOffset)
+  // Make sure reserved rooms are out of our way.
+  // if you want to call it an easter egg you can.
+  while (is325(roomNumbers[roomsOffset + roomID])) {
+    let cell = currentSheet.getCell(roomsOffset + roomID, 1)
+    cell.setValue("RESERVED--")
+    cell.getFormat().getFill().setColor(colorCode("x"))
+    roomsOffset++
+    roomsAllocated++
+  }
+  let roomnum1: (string | number) = currentSheet.getCell(roomsOffset + roomID, 0).getValue() as (string | number)
+  if (roomnum1 == undefined || roomnum1 == "") {
+    currentSheet.getCell(roomsOffset + roomID, 0).setValue("Overflow" + (++overflowcount))
+    roomnum1 = "Overflow" + (overflowcount)
+  }
+  for (let j = 1; j < leftOvers.length; j++) {
+    let ID = leftOvers[j]
+    if (headcount == roomsize) {
+      let cell = currentSheet.getCell(roomsOffset + roomID, 1)
+      cell.setValue("other Girl")
+      cell.getFormat().getFill().setColor(colorCodeSectors("other Girl"))
+      currentSheet.getCell(roomsOffset + roomID, 2).setValue(roomID)
+      roomID++
+      headcount = 0
+      roomsAllocated++
+      while (is325(roomNumbers[roomsOffset + roomID])) {
+        let cell = currentSheet.getCell(roomsOffset + roomID, 1)
+        cell.setValue("RESERVED--")
+        cell.getFormat().getFill().setColor(colorCode('x'))
+        roomsOffset++
+        roomsAllocated++
+      }
+      roomnum1 = (roomNumbers[roomsOffset + roomID] === undefined ? undefined : roomNumbers[roomsOffset + roomID][0]) as (string | number)
+      if (roomnum1 == undefined || roomnum1 == "") {
+        currentSheet.getCell(roomsOffset + roomID, 0).setValue("Overflow" + (++overflowcount))
+        roomnum1 = "Overflow" + (overflowcount)
+      }
+    }
+    headcount++
+    currentSheet.getCell(roomsOffset + roomID, 2 + headcount).setValue(ID)
+    currentSheet.getCell(roomsOffset + roomID, 2 + headcount).getFormat().getFill().setColor(colorCode(ID))
+    students[students.findIndex((s) => (s !== undefined && s.ID == ID))].roomNumber = roomnum1
+    students[students.findIndex((s) => (s !== undefined && s.ID == ID))].leftover = true
+  }
+
+  // if there are still leftover students in the leftover sector,
+  if (headcount > 0) {
+    // Get a new room up n' running
+    while (is325(roomNumbers[roomsOffset + roomID])) {
+      let cell = currentSheet.getCell(roomsOffset + roomID, 1)
+      cell.setValue("RESERVED--")
+      cell.getFormat().getFill().setColor(colorCode('x'))
+      roomsOffset++
+      roomsAllocated++
+    }
+    let cell = currentSheet.getCell(roomsOffset + roomID, 1)
+    cell.setValue("other Girl")
+    cell.getFormat().getFill().setColor(colorCodeSectors("other Girl"))
+    currentSheet.getCell(roomsOffset + roomID, 2).setValue(roomID)
+    roomID++
+    headcount = 0
+    roomsAllocated++
+  }
+
+  // make sure the last few rooms are marked as either CHAPERONES or OTHER or RESERVED-- in case of 325.
+  roomsOffset = roomsAllocated + 1
+  leftOvers = [""]
+  // console.log(roomsOffset)
+  let chapCount = 0
+  for (let j = roomsOffset; j <= totalRooms; j++) {
+    if (is325(roomNumbers[j])) {
+      currentSheet.getCell(j, 1).setValue("RESERVED--")
+      currentSheet.getCell(j, 1).getFormat().getFill().setColor(colorCode('x'))
+    } else {
+      if (chapCount < maxchapcountboy) {
+        currentSheet.getCell(j, 1).setValue("CHAPERONES")
+        currentSheet.getCell(j, 1).getFormat().getFill().setColor(colorCodeSectors('y'))
+        currentSheet.getCell(j, 2).setValue(chapCount + 1)
+        for (let k = 3; k <= chapsize + 2; k++)
+          currentSheet.getCell(j, k).getFormat().getFill().setColor(colorCode('y'))
+      }
+      else {
+        currentSheet.getCell(j, 1).setValue("OTHER")
+      }
+      chapCount++
+    }
+  }
+  // Generate a final sheet
+  let signin = workbook.addWorksheet("Roster")
+
+  // sort by grade and then last name
+  students.sort((a, b) => {
+    if (a === undefined && b !== undefined)
+      return 1
+    if (a !== undefined && b === undefined)
+      return -1
+    if (a === undefined && b === undefined)
+      return 0
+    if (a.grade != b.grade) {
+      if (a.grade < b.grade) return -1
+      return 1
+    }
+    if (a.last.toUpperCase() != b.last.toUpperCase()) {
+      if (a.last.toUpperCase() < b.last.toUpperCase()) return -1
+      return 1
+    }
+    if (a.first.toUpperCase() != b.first.toUpperCase()) {
+      if (a.first.toUpperCase() < b.first.toUpperCase()) return -1
+      return 1
+    }
+    return 0
+  })
+  let finalArray: (number | string | boolean)[][] = []
+  students.forEach((value) => {
+    if (value !== undefined) {
+      finalArray.push(value.serialize())
+    }
+  })
+  signin.getRange("A3:F" + (n + 2).toString()).setValues(finalArray)
+  signin.getRange("A1:H1").merge()
+  signin.getRange("A1").getFormat().getFont().setName("Comic Sans MS") // Ms. Huffine's LEAST favorite font. Both Mrs. Hicks and I like this.
+  signin.getRange("A1").getFormat().setHorizontalAlignment(ExcelScript.HorizontalAlignment.center)
+  signin.getRange("A1").setValue("TMSCA Hotel Rooms " + getCurrentYear())
+  signin.getRange("A2:H2").setValues([["Last", "First", "Grade", "Boy/Girl", "Room Sector", "Room Number", "Sign-in", "Sign-out"]])
+  signin.getRange("A2:F" + (n + 2).toString()).getFormat().autofitColumns()
+  let format = signin.getRange("A2:H" + (n + 2).toString()).getFormat()
+  format.getRangeBorder(ExcelScript.BorderIndex.edgeLeft).setWeight(ExcelScript.BorderWeight.thin);
+  format.getRangeBorder(ExcelScript.BorderIndex.edgeTop).setWeight(ExcelScript.BorderWeight.thin);
+  format.getRangeBorder(ExcelScript.BorderIndex.insideVertical).setWeight(ExcelScript.BorderWeight.thin);
+  format.getRangeBorder(ExcelScript.BorderIndex.insideHorizontal).setWeight(ExcelScript.BorderWeight.thin);
+  format.getRangeBorder(ExcelScript.BorderIndex.edgeBottom).setWeight(ExcelScript.BorderWeight.thin);
+  format.getRangeBorder(ExcelScript.BorderIndex.edgeRight).setWeight(ExcelScript.BorderWeight.thin);
+  let six = finalArray.findIndex((a) => { if (a[2] == 6 || a[2] == 7 || a[2] == 8) return true; else return false }) + 3
+  let seven = finalArray.findIndex((a) => { if (a[2] == 7 || a[2] == 8) return true; else return false }) + 3
+  let eight = finalArray.findIndex((a) => { if (a[2] == 8) return true; else return false }) + 3
+  let end = n + 3
+  // console.log(six, seven, eight)
+  if (six != seven) {
+    signin.getRange("C" + six.toString() + ":C" + (seven - 1).toString()).getFormat().getFill().setColor(colorCode('6'))
+  }
+  if (seven != eight) {
+    signin.getRange("C" + seven.toString() + ":C" + (eight - 1).toString()).getFormat().getFill().setColor(colorCode('7'))
+  }
+  if (eight != -1) {
+    signin.getRange("C" + eight.toString() + ":C" + (end - 1).toString()).getFormat().getFill().setColor(colorCode('8'))
+  }
+  // Boy/Girl is a little complex. Do it.
+  for (let a = 3; a <= n + 2; a++) {
+    if (finalArray[a - 3][3] == "Boy") signin.getRange("D" + a).getFormat().getFill().setColor("#00D0D0")
+    if (finalArray[a - 3][3] == "Girl") signin.getRange("D" + a).getFormat().getFill().setColor("#D000D0")
+  }
+  signin.activate()
+}
+
+// main function to bootstrap the appropriate top-level function
+function main(workbook: ExcelScript.Workbook) {
+  let sheet = workbook.getActiveWorksheet()
+  if (sheet.getCell(19, 5).getValue() == "SOLVER") {
+    indSheet(sheet)
+  } else if (sheet.getName() == "Student Info" || sheet.getName() == "Requests") {
+    parser(workbook)
+  }
+}
+// END OF 1.1.0 beta

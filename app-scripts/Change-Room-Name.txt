@@ -1,0 +1,39 @@
+// Copyright Xinyuan Zhou (c) 2024. All rights reserved.
+// Originally written for my contest math coach.
+// Permission granted to reproduce the *output* of this program in original/modified form without any restrictions.
+
+
+function colorCodeSectors(id: string): string {
+  if (id.startsWith("6")) return 'yellow'
+  if (id.startsWith("7")) return 'lightgreen'
+  if (id.startsWith("8")) return 'lightblue'
+  if (id.startsWith("other") || id.startsWith("(multiple)")) return '#FF7F7F'
+  if (id == 'x') return 'pink'
+  return 'orange'
+}
+
+function main(workbook: ExcelScript.Workbook) {
+  let currentSheet = workbook.getActiveWorksheet()
+  let signin = workbook.getWorksheet("Roster")
+  let linenum = <number>currentSheet.getRange("J16").getValue()
+  let n = workbook.getWorksheet("Student Info").getRange("F3").getValue() as number
+  let vals = signin.getRange("A3:F" + (n + 2).toString()).getValues() as (number | string)[][]
+  console.log(n)
+  let tosector = <string>currentSheet.getRange("J18").getValue()
+  let toordinal = <number>currentSheet.getRange("L18").getValue()
+  currentSheet.getRange("B"+linenum).setValue(tosector)
+  currentSheet.getRange("C"+linenum).setValue(toordinal)
+  let room = currentSheet.getRange("A" + linenum).getValue()
+  let ccpatern = tosector
+  if (ccpatern == "RESERVED--") ccpatern = "x";
+
+  currentSheet.getRange("B"+linenum).getFormat().getFill().setColor(colorCodeSectors(ccpatern))
+  // update roster
+  vals.forEach((a) => {
+    if (a[5] == room)
+    {
+      a[4] = tosector;
+    }
+  })
+  signin.getRange("A3:F" + (n + 2).toString()).setValues(vals)
+}
