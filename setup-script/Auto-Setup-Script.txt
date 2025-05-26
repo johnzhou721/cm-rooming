@@ -1,0 +1,116 @@
+// Copyright Xinyuan Zhou (c) 2024. All rights reserved.
+// Script Generated from Record Actions; added later in archive.
+
+function main(workbook: ExcelScript.Workbook) {
+  // Add a new worksheet with name "Student Info"
+  let student_Info = workbook.addWorksheet("Student Info");
+  // Set range A1:D1 on student_Info
+  student_Info.getRange("A1:D1").setValues([["Last","First","Grade Level","Gender"]]);
+  // Set range F2 on student_Info
+  student_Info.getRange("F2").setValue("# of students");
+  // Set range F4 on student_Info
+  student_Info.getRange("F4").setValue("multiple grade level quota-Boy");
+  // Set range F6 on student_Info
+  student_Info.getRange("F6").setValue("multiple grade level quota-Girl");
+  // put label
+  student_Info.getRange("F8").setValue("# of people per room");
+  // set fill
+  student_Info.getRange("F9").getFormat().getFill().setColor("#ffff00");
+  // Set fill color to #ffff00 for range F3 on student_Info
+  student_Info.getRange("F3").getFormat().getFill().setColor("#ffff00");
+  // Set fill color to #ffff00 for range F5 on student_Info
+  student_Info.getRange("F5").getFormat().getFill().setColor("#ffff00");
+  // Set fill color to #ffff00 for range F7 on student_Info
+  student_Info.getRange("F7").getFormat().getFill().setColor("#ffff00");
+  // Set fill color to #ffff00 for range A1:D1 on student_Info
+  student_Info.getRange("A1:D1").getFormat().getFill().setColor("#ffff00");
+  // Add a new worksheet with name "Requests"
+  let requests = workbook.addWorksheet("Requests");
+  // Set range F12 on student_Info
+  student_Info.getRange("F19").setValue("HOOK UP THE MAIN SCRIPT HERE");
+  // Set range A1:E1 on requests
+  requests.getRange("A1:E1").setValues([["Student 1","Grade Level","Student 2","Grade Level","Multiple-grade priority"]]);
+  // Set range G4 on requests
+  requests.getRange("G4").setValue("# of requests");
+  // Set range G8 on requests
+  requests.getRange("G8").setValue("HOOK UP Highlight-Multiple SCRIPT HERE");
+  // Set fill color to #ffff00 for range A1:E1 on requests
+  requests.getRange("A1:E1").getFormat().getFill().setColor("#ffff00");
+  // Set fill color to #ffff00 for range G5 on requests
+  requests.getRange("G5").getFormat().getFill().setColor("#ffff00");
+  // Add a new worksheet with name "Anti-Requests"
+  let anti_Requests = workbook.addWorksheet("Anti-Requests");
+  // Add a new worksheet with name "Room Numbers"
+  let room_Numbers = workbook.addWorksheet("Room Numbers");
+  // Set range A1:A3 on room_Numbers
+  room_Numbers.getRange("A1:A3").setValues([[""],["Boy"],["Room Numbers"]]);
+  // Set range B1 on room_Numbers
+  room_Numbers.getRange("B1").setValue("rooms");
+  // Set range D1 on room_Numbers
+  room_Numbers.getRange("E1").setValue("rooms");
+  // Set range C2:C3 on room_Numbers
+  room_Numbers.getRange("D2:D3").setValues([["Girl"],["Room Numbers"]]);
+  // Set fill color to #ffff00 for range A1 on room_Numbers
+  room_Numbers.getRange("A1").getFormat().getFill().setColor("#ffff00");
+  // Set fill color to #ffff00 for range A3 on room_Numbers
+  room_Numbers.getRange("A3").getFormat().getFill().setColor("#ffff00");
+  // Set fill color to #ffff00 for range C1 on room_Numbers
+  room_Numbers.getRange("D1").getFormat().getFill().setColor("#ffff00");
+  // Set fill color to #ffff00 for range C3 on room_Numbers
+  room_Numbers.getRange("D3").getFormat().getFill().setColor("#ffff00");
+  // Add a new worksheet with name "tplt-utils"
+  let tplt_utils = workbook.addWorksheet("tplt-utils");
+  // Set range J5 on tplt_utils
+  tplt_utils.getRange("J5").setValue("Move student in CELL");
+  // Set range J7:K7 on tplt_utils
+  tplt_utils.getRange("J7:K7").setValues([["To CELL","'- will swap if existing"]]);
+  // Set range J10 on tplt_utils
+  tplt_utils.getRange("J10").setValue("HOOK UP Move-Students SCRIPT HERE");
+  // Set fill color to #ffff00 for range J6 on tplt_utils
+  tplt_utils.getRange("J6").getFormat().getFill().setColor("#ffff00");
+  // Set fill color to #ffff00 for range J8 on tplt_utils
+  tplt_utils.getRange("J8").getFormat().getFill().setColor("#ffff00");
+  // Set range A1:G1 on tplt_utils
+  tplt_utils.getRange("A1:G1").setValues([["8888", "(multiple) Girl", "100", "Abcdefgh Ijklmnop 6", "Abcdefgh Ijklmnop 6", "Abcdefgh Ijklmnop 6", "Abcdefgh Ijklmnop 6"]]);
+  // Set range J21 on selectedSheet
+  tplt_utils.getRange("J21").setValue("Hook up Rename Sector button here");
+  // Auto fit the columns of range A:G on selectedSheet
+  tplt_utils.getRange("A:G").getFormat().autofitColumns();
+  // Clear ExcelScript.ClearApplyTo.contents from range A1:G1 on selectedSheet
+  tplt_utils.getRange("A1:G1").clear(ExcelScript.ClearApplyTo.contents);
+  // Set range J15 on tplt_utils
+  tplt_utils.getRange("J15").setValue("Rename room on LINE");
+  // Set range J17 on tplt_utils
+  tplt_utils.getRange("J17").setValue("to");
+  // Set range I18 on tplt_utils
+  tplt_utils.getRange("I18").setValue("sector ->");
+  // Set range K18 on tplt_utils
+  tplt_utils.getRange("K18").setValue("ordinal ->");
+  // Set fill color to #ffff00 for range J16 on tplt_utils
+  tplt_utils.getRange("J16").getFormat().getFill().setColor("#ffff00");
+  // Set fill color to #ffff00 for range J18 on tplt_utils
+  tplt_utils.getRange("J18").getFormat().getFill().setColor("#ffff00");
+  // Set fill color to #ffff00 for range L18 on tplt_utils
+  tplt_utils.getRange("L18").getFormat().getFill().setColor("#ffff00");
+  // Set range A1:D1 on anti_Requests
+  anti_Requests.getRange("A1:D1").setValues([["Student 1","Grade","Student 2","Grade"]]);
+  // Set range G4 on anti_Requests
+  anti_Requests.getRange("G4").setValue("# of anti-requests");
+  // Set fill color to #ff00eb for range A1:D1 on anti_Requests
+  anti_Requests.getRange("A1:D1").getFormat().getFill().setColor("#ff00eb");
+  // Set fill color to #ff00eb for range G5 on anti_Requests
+  anti_Requests.getRange("G5").getFormat().getFill().setColor("#ff00eb");
+  let selectedSheet = workbook.getWorksheet("Student Info");
+  // Set range F10 on selectedSheet
+  selectedSheet.getRange("F10").setValue("Chaperone number of rooms - Boy floor");
+  // Set fill color to #ff00ea for range F11 on selectedSheet
+  selectedSheet.getRange("F11").getFormat().getFill().setColor("#ff00ea");
+  // Set range F12 on selectedSheet
+  selectedSheet.getRange("F12").setValue("Chaperone number of rooms - Girl floor");
+  // Set range F14 on selectedSheet
+  selectedSheet.getRange("F14").setValue("# of people per chaperone room (highlight)");
+  // Set fill color to #ff00ea for range F13 on selectedSheet
+  selectedSheet.getRange("F13").getFormat().getFill().setColor("#ff00ea");
+  // Set fill color to #ff00ea for range F15 on selectedSheet
+  selectedSheet.getRange("F15").getFormat().getFill().setColor("#ff00ea");
+}
