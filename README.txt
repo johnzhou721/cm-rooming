@@ -1,4 +1,4 @@
-This is not meant for use in ANYTHING. I'm just keeping track of random spaghetti code I wrote 1 year ago (time of writing: 13 years old) for a school teacher to arrange rooms on a field trip.
+Code to sort people into rooms for a field trip at school.  For internal use only, just trying to be transparent w/ my math teacher about what's in the scripts attached to the workbooks I share with her.
 
 Some minimal docs is at man.pdf.
 
