@@ -292,8 +292,7 @@ function solver(nRange: string[][], aRange: string[][], antiARange: string[][]) 
       if (cnt >= 3) {
         rooms[i - 1][0] = gr - 1
       }
-      else
-      {
+      else {
         rooms[i - 1][0] = "Extras"
       }
       cnt++
@@ -373,9 +372,9 @@ function parser(workbook: ExcelScript.Workbook) {
   }
   let cmp = (a: interRequest, b: interRequest) => {
     if (a.ma < b.ma) return -1
-    if (b.ma > a.ma) return 1
+    if (b.ma < a.ma) return 1
     if (a.req.rID < b.req.rID) return -1
-    if (b.req.rID > a.req.rID) return 1
+    if (b.req.rID < a.req.rID) return 1
     return 0
   }
   interReq["Boy"].sort((a, b) => { return cmp(a, b) })
@@ -660,13 +659,12 @@ function parser(workbook: ExcelScript.Workbook) {
       cell.setValue(sectorName)
       cell.getFormat().getFill().setColor(colorCodeSectors(sectorName))
       currentSheet.getCell(roomOffset + j, 2).setValue(j)
-      let roomnum: (string|number)
+      let roomnum: (string | number)
       if (roomNumbers[roomOffset + j] == undefined || roomNumbers[roomOffset + j][0] == "") {
         currentSheet.getCell(roomOffset + j, 0).setValue("Overflow" + (++overflowcount))
         roomnum = "Overflow" + (overflowcount)
       }
-      else
-      {
+      else {
         roomnum = roomNumbers[roomOffset + j][0]
       }
       for (let k = 0; k < roomList[j].length; k++) {
@@ -806,9 +804,6 @@ function parser(workbook: ExcelScript.Workbook) {
   })
   signin.getRange("A3:F" + (n + 2).toString()).setValues(finalArray)
   signin.getRange("A1:H1").merge()
-  signin.getRange("A1").getFormat().getFont().setName("Comic Sans MS") // Ms. Huffine's LEAST favorite font. Both Mrs. Hicks and I like this.
-  signin.getRange("A1").getFormat().setHorizontalAlignment(ExcelScript.HorizontalAlignment.center)
-  signin.getRange("A1").setValue("TMSCA Hotel Rooms " + getCurrentYear())
   signin.getRange("A2:H2").setValues([["Last", "First", "Grade", "Boy/Girl", "Room Sector", "Room Number", "Sign-in", "Sign-out"]])
   signin.getRange("A2:F" + (n + 2).toString()).getFormat().autofitColumns()
   let format = signin.getRange("A2:H" + (n + 2).toString()).getFormat()
@@ -837,6 +832,10 @@ function parser(workbook: ExcelScript.Workbook) {
     if (finalArray[a - 3][3] == "Boy") signin.getRange("D" + a).getFormat().getFill().setColor("#00D0D0")
     if (finalArray[a - 3][3] == "Girl") signin.getRange("D" + a).getFormat().getFill().setColor("#D000D0")
   }
+  // Finalize header
+  signin.getRange("A1").getFormat().setHorizontalAlignment(ExcelScript.HorizontalAlignment.center)
+  signin.getRange("A1").setValue("TMSCA Hotel Rooms " + getCurrentYear())
+  signin.getRange("A1").getFormat().getFont().setName("Comic Sans MS")
   signin.activate()
 }
 
